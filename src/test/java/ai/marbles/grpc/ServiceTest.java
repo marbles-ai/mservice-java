@@ -23,15 +23,6 @@ public class ServiceTest {
 		}
 
 		@Override
-		public void endpoints(Empty request, StreamObserver<ServiceEndpoints> responseObserver) {
-			ServiceEndpoints ep = ServiceEndpoints.newBuilder()
-					.addEndpoints(Endpoint.newBuilder().setName("test123").build())
-					.build();
-			responseObserver.onNext(ep);
-			responseObserver.onCompleted();
-		}
-
-		@Override
 		public void configure(Configuration request, StreamObserver<ConfigResult> responseObserver) {
 			responseObserver.onNext(ConfigResult.newBuilder()
 					.setStatus(ConfigResult.Status.WARNING).build());
@@ -48,11 +39,6 @@ public class ServiceTest {
 
 			ServiceConnector client = new ServiceConnector("localhost", 9001);
 			DiscoveryGrpc.DiscoveryBlockingStub stub = DiscoveryGrpc.newBlockingStub(client.getChannel());
-
-			ServiceEndpoints ep = stub.endpoints(Empty.newBuilder().build());
-			assertTrue(ep != null);
-			assertTrue(ep.getEndpointsCount() == 1);
-			assertTrue(ep.getEndpoints(0).getName().equals("test123"));
 
 			ConfigResult conf = stub.configure(Configuration.newBuilder().build());
 			assertTrue(conf != null);
@@ -74,16 +60,13 @@ public class ServiceTest {
 			ServiceConnector client = new ServiceConnector("localhost", 9002);
 			DiscoveryGrpc.DiscoveryFutureStub stub = DiscoveryGrpc.newFutureStub(client.getChannel());
 
-			ListenableFuture<ServiceEndpoints> rpc1 = stub.endpoints(Empty.newBuilder().build());
-			ServiceEndpoints ep = rpc1.get();
-			assertTrue(ep != null);
-			assertTrue(ep.getEndpointsCount() == 1);
-			assertTrue(ep.getEndpoints(0).getName().equals("test123"));
-
 			ListenableFuture<ConfigResult> rpc2 = stub.configure(Configuration.newBuilder().build());
 			ConfigResult conf = rpc2.get();
 			assertTrue(conf != null);
 			assertTrue(conf.getStatus().equals(ConfigResult.Status.WARNING));
+
+			assertTrue(client.ping(0));
+			assertTrue(client.ping(1000));
 
 			assertTrue(client.shutdown().blockUntilShutdown(3000));
 			assertTrue(server.shutdown().blockUntilShutdown(3000));

@@ -6,6 +6,7 @@
 
 package ai.marbles.grpc;
 
+import com.google.common.util.concurrent.ListenableFuture;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.Channel;
@@ -20,13 +21,17 @@ import java.net.UnknownServiceException;
 import java.util.Collections;
 import java.math.BigInteger;
 import java.security.SecureRandom;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.DAYS;
 
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
-import ai.marbles.grpc.ServiceEndpoints;
+import ai.marbles.grpc.Configuration;
 import ai.marbles.grpc.DiscoveryGrpc;
 
 /**
@@ -120,15 +125,53 @@ public final class ServiceConnector {
     }
 
     /**
-     * Get supported services
+     * Configure and endpoint.
+     *
+     * @param conf      The configuration
+     * @param timeout   A timeout in millseconds. Zero means infinite
+     * @return The ConfigResult if successful, else null if it times out.
      */
-    public ServiceEndpoints discoverEndpoints() throws UnknownServiceException {
-        DiscoveryGrpc.DiscoveryBlockingStub stub = DiscoveryGrpc.newBlockingStub(channel_);
+    public ConfigResult configure(Configuration conf, long timeout) throws UnknownServiceException,
+            InterruptedException, ExecutionException {
+        DiscoveryGrpc.DiscoveryFutureStub stub = DiscoveryGrpc.newFutureStub(channel_);
         try {
-            return stub.endpoints(Empty.newBuilder().build());
+            ListenableFuture<ConfigResult> rpc = stub.configure(conf);
+            ConfigResult result;
+            if (timeout > 0) {
+                result = rpc.get(timeout, TimeUnit.MILLISECONDS);
+            } else {
+                result = rpc.get();
+            }
+            return result;
+        } catch (TimeoutException e) {
+            return null;
         } catch (StatusRuntimeException e) {
             logger.warn("RPC failed", e);
             throw new UnknownServiceException(e.getMessage());
         }
+    }
+
+    /**
+     * Do nothing - useful when starting server and we want to wait until its ready.
+     * @param timeout   A timeout in millseconds. Zero means infinite
+     * @return True if successful, else false if it times out.
+     */
+    public boolean ping(long timeout) throws UnknownServiceException,
+            InterruptedException, ExecutionException {
+        DiscoveryGrpc.DiscoveryFutureStub stub = DiscoveryGrpc.newFutureStub(channel_);
+        try {
+            ListenableFuture<Empty> rpc = stub.ping(Empty.newBuilder().build());
+            if (timeout > 0) {
+                rpc.get(timeout, TimeUnit.MILLISECONDS);
+            } else {
+                rpc.get();
+            }
+        } catch (TimeoutException e) {
+            return false;
+        } catch (StatusRuntimeException e) {
+            logger.warn("RPC failed", e);
+            throw new UnknownServiceException(e.getMessage());
+        }
+        return true;
     }
 }
