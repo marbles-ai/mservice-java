@@ -1,6 +1,6 @@
 group 'marbles.ai'
-version '0.1-SNAPSHOT'
-def grpcVersion = '1.6.1'
+version '0.2.0'
+def grpcVersion = '1.1.2'
 
 apply plugin: 'java'
 apply plugin: 'com.google.protobuf'
